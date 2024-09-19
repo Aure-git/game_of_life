@@ -12,11 +12,6 @@ use piston::{Button, Key, MouseButton, RenderArgs, UpdateArgs};
 
 
 
-#[derive(PartialEq)]
-enum SpeedChange {
-    Up,
-    Down
-}
 
 #[derive(Clone, Copy)]
 enum Speed {
@@ -127,31 +122,30 @@ impl Game {
         self.state = !self.state;
     }
 
-    fn change_update(&mut self, change: SpeedChange) {
-        if change == SpeedChange::Up {
-            match self.speed {
-                Speed::SuperSlow => {self.speed = Speed::VerySlow},
-                Speed::VerySlow => {self.speed = Speed::Slow},
-                Speed::Slow => {self.speed = Speed::Normal},
-                Speed::Normal => {self.speed = Speed::Fast},
-                Speed::Fast => {self.speed = Speed::VeryFast},
-                Speed::VeryFast => {self.speed = Speed::SuperFast},
-                Speed::SuperFast => {self.speed = Speed::InsanelyFast},
-                Speed::InsanelyFast => {}
-            };
-        }
-        else {
-            match self.speed {
-                Speed::InsanelyFast => {self.speed = Speed::SuperFast},
-                Speed::SuperFast => {self.speed = Speed::VeryFast},
-                Speed::VeryFast => {self.speed = Speed::Fast},
-                Speed::Fast => {self.speed = Speed::Normal},
-                Speed::Normal => {self.speed = Speed::Slow},
-                Speed::Slow => {self.speed = Speed::VerySlow},
-                Speed::VerySlow => {self.speed = Speed::SuperSlow},
-                Speed::SuperSlow => {}
-            };
-        }
+    fn increase_updates(&mut self) {
+        match self.speed {
+            Speed::SuperSlow => {self.speed = Speed::VerySlow},
+            Speed::VerySlow => {self.speed = Speed::Slow},
+            Speed::Slow => {self.speed = Speed::Normal},
+            Speed::Normal => {self.speed = Speed::Fast},
+            Speed::Fast => {self.speed = Speed::VeryFast},
+            Speed::VeryFast => {self.speed = Speed::SuperFast},
+            Speed::SuperFast => {self.speed = Speed::InsanelyFast},
+            Speed::InsanelyFast => {}
+        };
+    }
+
+    fn decrease_updates(&mut self) {
+        match self.speed {
+            Speed::InsanelyFast => {self.speed = Speed::SuperFast},
+            Speed::SuperFast => {self.speed = Speed::VeryFast},
+            Speed::VeryFast => {self.speed = Speed::Fast},
+            Speed::Fast => {self.speed = Speed::Normal},
+            Speed::Normal => {self.speed = Speed::Slow},
+            Speed::Slow => {self.speed = Speed::VerySlow},
+            Speed::VerySlow => {self.speed = Speed::SuperSlow},
+            Speed::SuperSlow => {}
+        };
     }
 
     fn load_glider_canon(&mut self) {
@@ -255,8 +249,8 @@ impl Game {
         match button {
             Button::Keyboard(key) => {
                 match key {
-                    Key::P => self.change_update(SpeedChange::Up),
-                    Key::O => self.change_update(SpeedChange::Down),
+                    Key::P => self.increase_updates(),
+                    Key::O => self.decrease_updates(),
                     Key::Space => self.switch_pause(),
                     Key::C => if self.state == GameState::Pause {self.clear()},
                     Key::G => self.load_glider_canon(),

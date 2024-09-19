@@ -1,0 +1,10 @@
+[package]
+name = "pistony"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+piston = "1.0.0"
+piston2d-graphics = "0.44.0"
+piston2d-opengl_graphics = "0.85.1"
+pistoncore-glfw_window = "0.81.0"

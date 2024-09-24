@@ -1,14 +1,18 @@
 mod grid;
 mod game_state;
+mod positions;
+mod camera;
 
 use grid::GameGrid;
 use game_state::GameState;
+use positions::*;
+use camera::Camera;
 use crate::consts::*;
 
 use std::collections::HashSet;
 
 use opengl_graphics::GlGraphics;
-use piston::{Button, Key, MouseButton, RenderArgs, UpdateArgs};
+use piston::{Button, Key, MouseButton, RenderArgs, ResizeArgs, UpdateArgs};
 
 
 
@@ -40,48 +44,36 @@ impl From<Speed> for f64 {
     }
 }
 
-struct ScreenPosition(f64, f64); //top left hand corner of the square
-#[derive(PartialEq, Eq, Hash)]
-struct GridPosition(usize, usize);
-
-impl From<ScreenPosition> for GridPosition {
-    fn from(value: ScreenPosition) -> Self {
-        let (x,y) = (value.0, value.1);
-        GridPosition((x/CELL_SIZE).round() as usize, (y/CELL_SIZE).round() as usize)
-    }
-}
-
-impl From<GridPosition> for ScreenPosition {
-    fn from(value: GridPosition) -> Self {
-        let (x,y) = (value.0, value.1);
-        ScreenPosition(x as f64 * CELL_SIZE, y as f64 * CELL_SIZE)
-    }
-}
 
 pub struct Game {
     gl: GlGraphics,
+    camera: Camera,
     board: GameGrid,
     state: GameState,
     total_dt: f64,
     speed: Speed,
     mouse_coords: Option<[f64; 2]>,
-    left_click: bool,
+    pressed_buttons: HashSet<Button>,
     changed_tiles: HashSet<GridPosition>,
 }
 
 impl Game {
     pub fn new() -> Self {
-        println!("Grid size: ({:?},{:?})",GRID_WIDTH,GRID_HEIGHT);
         Game {
             gl: GlGraphics::new(OPEN_GL),
+            camera: Camera::default(),
             board: GameGrid::new(GRID_HEIGHT, GRID_WIDTH),
             state: GameState::Pause,
             total_dt: 0.0,
             speed: Speed::Normal,
             mouse_coords: None,
-            left_click: false,
+            pressed_buttons: HashSet::new(),
             changed_tiles: HashSet::new(),
         }
+    }
+
+    pub fn resize(&mut self, args: &ResizeArgs) {
+        self.camera.resize(args.window_size);
     }
 
     pub fn render(&mut self, args: &RenderArgs) {
@@ -94,23 +86,65 @@ impl Game {
         let (rows, cols) = self.board.get_shape();
         for y in 0..rows {
             for x in 0..cols{
-                let color = if self.board.get(y, x).unwrap() {CELL_COLOR} else {BG_COLOR};
-                let screen_pos = ScreenPosition::from(GridPosition(x,y));
-                rectangle(color, rectangle::square(screen_pos.0, screen_pos.1, CELL_SIZE), transform.clone(), gl);
+                if self.board.get(y, x).unwrap() { // Cell is alive ?
+                    if let Some(screen_pos) = GridPosition(x,y).to_screen_position(&self.camera) {
+                        // let scale = self.camera.zoom_scale();
+                        rectangle(
+                            CELL_COLOR,
+                            rectangle::square(screen_pos[0], screen_pos[1], self.camera.cell_lenght()),
+                            // [screen_pos[0], screen_pos[1], scale[0], scale[1]],
+                            transform.clone(),
+                            gl
+                        );
+                    }
+                }
             }
         }
         
         gl.draw_end();
     }
 
-    pub fn check_update(&mut self, args: &UpdateArgs) {
-        if self.state == GameState::Play {
-            self.total_dt += args.dt * f64::from(self.speed);
+    pub fn update(&mut self, args: &UpdateArgs) {
+        
+        let lshift = self.pressed_buttons.contains(&Button::Keyboard(Key::LShift));
+
+        // Zooming and dezooming
+        let zoom = self.pressed_buttons.contains(&Button::Keyboard(Key::S));
+        let dezoom = self.pressed_buttons.contains(&Button::Keyboard(Key::X));
+        if zoom && !dezoom {
+            self.camera.zoom(args.dt, lshift);
+        }
+        else if !zoom && dezoom {
+            self.camera.dezoom(args.dt, lshift);
+        }
+
+        // Moving the camera up, down, right or left
+        let speed = if lshift {SUPER_SPEED} else {SPEED};
+        let up = self.pressed_buttons.contains(&Button::Keyboard(Key::Up));
+        let down = self.pressed_buttons.contains(&Button::Keyboard(Key::Down));
+        let right = self.pressed_buttons.contains(&Button::Keyboard(Key::Right));
+        let left = self.pressed_buttons.contains(&Button::Keyboard(Key::Left));
+        if up && !down {
+            self.camera.move_max([0.0, args.dt * -speed]); // Negative because y is downward
+        }
+        else if !up && down {
+            self.camera.move_max([0.0, args.dt * speed]); // Positive for same reason
+        }
+        if right && !left {
+            self.camera.move_max([args.dt * speed, 0.0]);
+        }
+        else if !right && left {
+            self.camera.move_max([args.dt * -speed, 0.0]);
         }
         
-        if self.total_dt > DT_BEFORE_UPDATE {
-            self.total_dt -= DT_BEFORE_UPDATE;
-            self.board.next_generation();
+
+        // Updating the cell grid with a new generation
+        if self.state == GameState::Play {
+            self.total_dt += args.dt * f64::from(self.speed);
+            if self.total_dt > DT_BEFORE_UPDATE {
+                self.total_dt -= DT_BEFORE_UPDATE;
+                self.board.next_generation();
+            }
         }
     }
 
@@ -148,6 +182,7 @@ impl Game {
         };
     }
 
+    /*
     fn load_glider_canon(&mut self) {
         if self.state == GameState::Pause {
             let board_size = self.board.get_shape();
@@ -205,7 +240,7 @@ impl Game {
                 self.board.switch_state_at(3, 35).unwrap();
             }
         }
-    }
+    } */
 
     pub fn update_mouse_position(&mut self, position: [f64;2]) {
         self.mouse_coords = Some(position);
@@ -213,27 +248,40 @@ impl Game {
     }
 
     fn edit_at_position(&mut self, position: [f64;2]) {
-        if !self.left_click || self.state != GameState::Pause {
+        if !self.pressed_buttons.contains(&Button::Mouse(MouseButton::Left)) || self.state != GameState::Pause {
             return;
         }
-        let grid_position = GridPosition::from(
-            ScreenPosition(
-                (position[0]/CELL_SIZE).trunc() * CELL_SIZE,
-                (position[1]/CELL_SIZE).trunc() * CELL_SIZE
-            )
-        );
+        // println!("SCREEN: x={:?}, y={:?}", position[0], position[1]);
+        let grid_position = screen_to_grid(position, &self.camera);
         if !self.changed_tiles.contains(&grid_position) {
-            self.board.switch_state_at(grid_position.1, grid_position.0).unwrap();
+            // println!("GRID: x={:?}, y={:?}", grid_position.0, grid_position.1);
+            self.board.switch_state_at(grid_position.1, grid_position.0).unwrap_or_else(
+                |_| panic!("Try click ({:?},{:?})", grid_position.0, grid_position.1)
+            );
             self.changed_tiles.insert(grid_position);
         }
     }
 
-    pub fn handle_button_press(&mut self, button: Button) {
+    
+
+    pub fn handle_button_press(&mut self, button: Button) { // Only when STARTING to press
         match button {
+            Button::Keyboard(key) => {
+                match key {
+                    Key::S => {self.pressed_buttons.insert(Button::Keyboard(Key::S));},
+                    Key::X => {self.pressed_buttons.insert(Button::Keyboard(Key::X));},
+                    Key::Up => {self.pressed_buttons.insert(Button::Keyboard(Key::Up));},
+                    Key::Down => {self.pressed_buttons.insert(Button::Keyboard(Key::Down));}, 
+                    Key::Right => {self.pressed_buttons.insert(Button::Keyboard(Key::Right));},
+                    Key::Left => {self.pressed_buttons.insert(Button::Keyboard(Key::Left));},
+                    Key::LShift => {self.pressed_buttons.insert(Button::Keyboard(Key::LShift));},
+                    _ => {}
+                }
+            },
             Button::Mouse(mouse_button) => {
                 match mouse_button {
                     MouseButton::Left => {
-                        self.left_click = true;
+                        self.pressed_buttons.insert(Button::Mouse(MouseButton::Left));
                         if let Some(mouse_position) = self.mouse_coords {
                             self.edit_at_position(mouse_position);
                         }
@@ -252,15 +300,23 @@ impl Game {
                     Key::P => self.increase_updates(),
                     Key::O => self.decrease_updates(),
                     Key::Space => self.switch_pause(),
+                    Key::S => {self.pressed_buttons.remove(&Button::Keyboard(Key::S));},
+                    Key::X => {self.pressed_buttons.remove(&Button::Keyboard(Key::X));},
                     Key::C => if self.state == GameState::Pause {self.clear()},
-                    Key::G => self.load_glider_canon(),
+                    Key::D => self.camera.debug_info(),
+                    // Key::G => self.load_glider_canon(),
+                    Key::Up => {self.pressed_buttons.remove(&Button::Keyboard(Key::Up));},
+                    Key::Down => {self.pressed_buttons.remove(&Button::Keyboard(Key::Down));},
+                    Key::Right => {self.pressed_buttons.remove(&Button::Keyboard(Key::Right));},
+                    Key::Left => {self.pressed_buttons.remove(&Button::Keyboard(Key::Left));},
+                    Key::LShift => {self.pressed_buttons.remove(&Button::Keyboard(Key::LShift));},
                     _ => {},
                 }
             },
             Button::Mouse(mouse_button) => {
                 match mouse_button {
                     MouseButton::Left => {
-                        self.left_click = false;
+                        self.pressed_buttons.remove(&Button::Mouse(MouseButton::Left));
                         self.changed_tiles.clear();
                     },
                     _ => {}

@@ -88,11 +88,9 @@ impl Game {
             for x in 0..cols{
                 if self.board.get(y, x).unwrap() { // Cell is alive ?
                     if let Some(screen_pos) = GridPosition(x,y).to_screen_position(&self.camera) {
-                        // let scale = self.camera.zoom_scale();
                         rectangle(
                             CELL_COLOR,
                             rectangle::square(screen_pos[0], screen_pos[1], self.camera.cell_lenght()),
-                            // [screen_pos[0], screen_pos[1], scale[0], scale[1]],
                             transform.clone(),
                             gl
                         );
@@ -251,10 +249,8 @@ impl Game {
         if !self.pressed_buttons.contains(&Button::Mouse(MouseButton::Left)) || self.state != GameState::Pause {
             return;
         }
-        // println!("SCREEN: x={:?}, y={:?}", position[0], position[1]);
         let grid_position = screen_to_grid(position, &self.camera);
         if !self.changed_tiles.contains(&grid_position) {
-            // println!("GRID: x={:?}, y={:?}", grid_position.0, grid_position.1);
             self.board.switch_state_at(grid_position.1, grid_position.0).unwrap_or_else(
                 |_| panic!("Try click ({:?},{:?})", grid_position.0, grid_position.1)
             );
@@ -303,7 +299,6 @@ impl Game {
                     Key::S => {self.pressed_buttons.remove(&Button::Keyboard(Key::S));},
                     Key::X => {self.pressed_buttons.remove(&Button::Keyboard(Key::X));},
                     Key::C => if self.state == GameState::Pause {self.clear()},
-                    Key::D => self.camera.debug_info(),
                     // Key::G => self.load_glider_canon(),
                     Key::Up => {self.pressed_buttons.remove(&Button::Keyboard(Key::Up));},
                     Key::Down => {self.pressed_buttons.remove(&Button::Keyboard(Key::Down));},

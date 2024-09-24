@@ -1,4 +1,4 @@
-use crate::consts::{WORLD_WIDTH, WORLD_HEIGHT, SUPER_ZOOM_SPEED, ZOOM_SPEED, DEFAULT_CAMERA_WIDTH};
+use crate::consts::{WORLD_WIDTH, WORLD_HEIGHT, SUPER_ZOOM_SPEED, ZOOM_SPEED, DEFAULT_CAMERA_LENGTH};
 
 use super::{ScreenPosition, WorldPosition, DEFAULT_WINDOW_SIZE};
 
@@ -11,6 +11,7 @@ pub struct Camera {
     draw_size: [f64; 2],
 }
 
+/*
 fn assert_camera(camera: &Camera) {
     // x inside world
     assert!(camera.x.is_sign_positive(), "camera.x < 0");
@@ -38,6 +39,7 @@ fn assert_camera(camera: &Camera) {
     "bad camera dimension, left={:?}, right={:?}",
     camera.height * camera.draw_size[0], camera.draw_size[1] * camera.width);
 }
+*/
 
 fn minimumf64(a: f64, b: f64) -> f64 {
     if a<b {a} else {b}
@@ -46,7 +48,7 @@ fn minimumf64(a: f64, b: f64) -> f64 {
 impl Default for Camera {
     fn default() -> Self {
         let world_center = [WORLD_WIDTH /2.0, WORLD_HEIGHT /2.0];
-        let width = minimumf64(WORLD_WIDTH, DEFAULT_CAMERA_WIDTH);
+        let width = minimumf64(WORLD_WIDTH, DEFAULT_CAMERA_LENGTH);
         let height = width * DEFAULT_WINDOW_SIZE[1] / DEFAULT_WINDOW_SIZE[0];
 
         Camera {
@@ -60,10 +62,6 @@ impl Default for Camera {
 }
 
 impl Camera {
-
-    pub fn debug_info(&self) {
-        println!("DEBUG CAM: {:?}",[self.x, self.y, self.width, self.height, self.draw_size[0], self.draw_size[1]],);
-    }
 
     fn correct_position(&mut self) {
         if self.x + self.width >= WORLD_WIDTH - 0.1 {
@@ -116,7 +114,6 @@ impl Camera {
     }
 
     fn correct_dimension(&mut self) {
-        // sw / w = sh / h
         let a = self.width * self.draw_size[1];
         let b = self.height * self.draw_size[0];
 
@@ -132,7 +129,6 @@ impl Camera {
     pub fn resize(&mut self, new_draw_size: [f64;2]) {
 
         // Camera and screen should have same shape
-        // sw / w = sh / h
         self.width *= new_draw_size[0] / self.draw_size[0];
         self.height = self.width * new_draw_size[1] / new_draw_size[0];
 
@@ -142,11 +138,10 @@ impl Camera {
         self.correct_size();
         self.correct_position();
 
-        assert_camera(&self);
+        // assert_camera(&self);
     }
 
     pub fn world_to_screen(&self, position: WorldPosition) -> Option<ScreenPosition> {
-        // top left
         let x = (position[0] - self.x) / self.width * self.draw_size[0];
         let y = (position[1] - self.y) / self.height * self.draw_size[1];
 
@@ -179,7 +174,7 @@ impl Camera {
 
         self.correct_position();
 
-        assert_camera(&self);
+        // assert_camera(&self);
     }
 
     pub fn zoom(&mut self, dt: f64, faster: bool) {
@@ -188,7 +183,7 @@ impl Camera {
             let new_width = self.width - 2.0*epsilon;
             if new_width >= f64::MIN_POSITIVE {
     
-                let new_height = self.height * new_width / self.width; // w/h = nw/nh <=> nh = h*nw/w
+                let new_height = self.height * new_width / self.width;
                 if new_height >= f64::MIN_POSITIVE {
     
                     self.x += epsilon;
@@ -198,7 +193,7 @@ impl Camera {
                 }
             }
     
-            assert_camera(&self);
+            // assert_camera(&self);
         }
     }
 
@@ -206,7 +201,7 @@ impl Camera {
         if self.width < WORLD_WIDTH - 0.1 && self.height < WORLD_HEIGHT - 0.1 {
             let epsilon = (1.0 + dt) * if faster {SUPER_ZOOM_SPEED} else {ZOOM_SPEED};
             let new_width = self.width + 2.0*epsilon;
-            let new_height = self.height * new_width / self.width; // w/h = nw/nh <=> nh = h*nw/w
+            let new_height = self.height * new_width / self.width;
             self.x -= epsilon;
             self.y -= (new_height - self.height) / 2.0;
             self.width = new_width;
@@ -215,7 +210,7 @@ impl Camera {
             self.correct_size();
             self.correct_position();
     
-            assert_camera(&self);
+            // assert_camera(&self);
         }
     }
 

@@ -7,11 +7,6 @@ pub struct GameGrid {
 
 impl GameGrid {
     pub fn new(rows: usize, cols: usize) -> Self {
-        // let mut values = Vec::with_capacity(rows);
-        // (0..rows).for_each(|_| {
-        //     values.push(vec![false;cols]);
-        // });
-        // GameGrid {rows, cols, values}
         GameGrid { rows, cols, values: vec![vec![false; cols]; rows] }
     }
 
